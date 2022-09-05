@@ -1,0 +1,109 @@
+<html>
+  <head></head>
+  <body>
+    <div id="game"></div>
+    <script type="text/javascript" src="https://rawgithub.com/craftyjs/Crafty/release/dist/crafty-min.js"></script>
+    <script>
+
+
+
+        //myattr = {x: 30, y: 500, w: 10, h: 10 };
+        crafty = Crafty.init(800,800, document.getElementById('game'));
+
+
+
+        var b = [];
+        b.push(Crafty.e('2D, Destination').attr( {x: 300, y: 300, w: 2, h: 2} ));
+        console.log("b0 x, y", b[0].x, b[0].y);
+
+        var sprite = Crafty.e('2D, Canvas, Color, Collision')
+            .attr( {x: 0, y: 150, w: 10, h: 10} )
+            .color('#441207');
+
+
+        var square = Crafty.e('2D, Canvas, Color, Collision, Person')
+            .attr({x: 10, y: 10, w: 40, h: 40})
+            //.collision([this.x, this.y, 16, 0, 32, 16, 16, 32])
+            .color('red')
+            .bind("UpdateFrame", function(eventData) {
+            // Move to the right by 10 pixels per second
+             this.x = this.x + 10 * (eventData.dt / 1000);
+            })
+            .onHit('2D', function(hitDatas, isFirstCollision) { // on collision with bullets
+            //console.log("first time?", cxl);
+            if (isFirstCollision) {this.x = this.x;}
+            
+            //for (var i = 0, l = hitDatas.length; i < l; ++i) { // for each bullet hit
+                //console.log("hit data: ", i, " ", "\n", "obj", hitDatas[i].obj, "\nraw:", hitDatas[i]);
+                //hitDatas[i].obj.destroy(); // destroy the bullet
+                //this.health -= 25; // player looses health
+                //if (this.health <= 0) // once player's health depletes
+                //this.destroy(); // player dies
+            } );
+
+
+    class Person {
+        aspritez;
+        jam = 99;
+        constructor(id, age, timeWorking) {
+            this.id = id;
+            this.age = age;
+            this.timeWorking = timeWorking;
+        }
+        aspritez = Crafty.e("2D, asprite, Canvas, Color, Collision, Person, Delay")
+            .attr({x: 400, y: 0, w: 30, h: 30})
+            .asprite({x: 300, y: 300, reachAndWaitT: this.timeWorking}, 4000, "smootherStep")
+            .onHit('Destination', function(hitDatas, isFirstCollision) { 
+            //console.log("first time?", cxl);
+                 if (isFirstCollision) {
+                    //this.asprite( {x: 0, y: 0}, 6000, "smootherStep" );
+
+                    console.log("green box colision active, first hit"); 
+                    console.log(hitDatas);
+                    //console.log("\n new x, new y dest:", this.asprite.x, this.asprite.y);
+                }
+            })  
+            .bind("aspriteEnd", function(props, timeToWait = this.jam) {
+                    console.log("reached destination, timeWorking = ", props, timeToWait);
+                    //wait for preferred time at location
+                    //check game clock & move forward
+                    //      **Time is part of schedule
+                    //this.delay(function () {console.log("waiting");}, 5000, -1);
+                    this.delay(function (t = timeToWait) {
+                        console.log("timeToWait in this.delay() =", t);
+                        this.asprite({x: 0, y: 0}, 6000, "smootherStep" )}, 5000, 1);
+             }
+            )    
+            .color('#24dc18');
+
+        }        
+        //function waiting() {
+       //     console.log("waiting");
+        //}  
+
+    sprite.attr( {x: 550, y: 0, w: 10, h: 10});
+    sprite.bind("UpdateFrame", function(eventData) {
+        // Move to the right by 10 pixels per second
+         //console.log("sprite's x value after update", this.x, "\ny value is:", this.y);
+        //this.x = this.x + 10 * (eventData.dt / 1000);
+    });
+    //game loop8002
+    var p = new Person(10, 20, 3000);
+    console.log("new person created, ID, AGE, tWorking = ",p.id, p.age, p.timeWorking);
+    console.log("hits:\n", p.aspritez.hit("2D"));
+    for (let a = 0; a <= 5; a++) {
+            sprite.bind("UpdateFrame", function(eventData) {
+            // Move to the right by 10 pixels per second
+             this.x = this.x + a * (eventData.dt / 1000);
+            });
+                //sprite.shift(Number(a), Number(a), Number(0), Number(0));
+                //sprite.trigger("invalidate");
+                //sleep(2000).then(() => { console.log("in sleep") });
+    }
+
+    console.log("sprites vals: ", sprite.x, sprite.y, sprite.h, sprite.w);
+    
+    </script>
+
+  </body>
+</html>

@@ -1,6 +1,13 @@
 //var Crafty = require('/utilities/craftyjs');
 
 /*MASTER TO DO:
+
+    setCollisionArea() {
+        //Is this setting all collisions to one job zone class
+        let job = this;
+        let jobID = job.getID();
+
+
         [] Redo collision detection to be lighter.  Now we have a unique property type added for every destination
             [] Should temp Crafty boxes be made internal to the Person object?
             [] Where should they be cleaned up?
@@ -32,7 +39,7 @@ crafty.bind("UpdateFrame", function () {
 })
 // Blue Prints
 // Starting population
-    const START_POPA = 4;
+    const START_POPA = 1;
     const START_POPB = 80;
     const START_POPC = 120;
     const START_POPD = 95;
@@ -85,6 +92,8 @@ class Person {
         //    "mvPrefs": givePeferences(),
         //    "actPrefs": ["xxxxxx"]
         this.intel = intel;
+
+        this.staffList = ["Jobworked1"];
 
         /*
         var asprite = Crafty.e("2D, asprite, Canvas, Color, Collision")
@@ -169,7 +178,8 @@ class Person {
     }
 
     setSprite() {
-     
+        let personData = this;
+
         this.sprite = Crafty.e("2D, asprite, Canvas, Color, Collision, Person, Delay")
             .attr( {id: this.id, x: this.location[0], y: this.location[1], w: 3, h: 3} )
             .asprite({x: this.schedule[0].x, y: this.schedule[0].y, reachAndWaitT: this.schedule[0].t}, 4000, "smootherStep")
@@ -188,8 +198,36 @@ class Person {
                     //console.log("\n new x, new y dest:", this.asprite.x, this.asprite.y);
                 }
             })  
-        */
-            .bind( "aspriteEnd", function(finishedasprite) {
+        */  .onHit('Job', function(hitDatas, isFirstHit) { // on collision with bullets
+                let jobID = hitDatas[0].obj.id;
+                //log this line for debugging.  
+                //--Prints for every single frame of collision.
+                //console.log("PERSON %d LOGGED INTO WORKSITE", this.id, jobID);
+    
+                if (isFirstHit) {
+                    console.log("PERSON %d LOGGED INTO WORKSITE", this.id)
+                    let jobID = hitDatas[0].obj.id;
+                    console.log("this is being sent to logEventStartTime() as a parameter for id ", jobID);
+                    personData.logEventStartTime(jobID);
+                    console.log(hitDatas[0]);
+    
+                    console.log("JOB- %s: %s's time clock: %f", jobID, ("JOHNNY00-" + hitDatas[0].obj.id), crafty.frame() );
+                    
+                }
+
+            }, function(id) { 
+                    let siteType = id.slice(0, id.slice.length-1);
+                    console.log("from person: person is leaving work");
+                    console.log("ID OF LAST HIT PASSED INTO CALLBACKOFF FUNC", id);
+
+                    personData.intel[siteType].push(crafty.frame());
+                    console.log("JOHNNY%s's location data for %s", personData.id, siteType, personData.intel[siteType]);
+
+                    let shiftCount = personData.intel[siteType].length - 1;
+                    let timeWorked = (personData.intel[siteType][shiftCount]) - (personData.intel[siteType][shiftCount - 1]);
+                    console.log("JOHNNY%s's Time worked: %s\nEarnings:  $%d", personData.id, timeWorked, (timeWorked * 18));
+            })
+            .bind("aspriteEnd", function(finishedasprite) {
                 //console.log("REACHED DESTINATION: \n");
                 //console.log("passed obj = ", finishedasprite["reachAndWaitT"]);
                 //console.log("T IS: ", finishedasprite["reachAndWaitT"]);
@@ -246,6 +284,18 @@ class Person {
         //update destination
         this.sprite.asprite(this.schedule.push(this.schedule.shift()).x, this.schedule[0].y, 6000, "smootherStep" ); 
     }
+
+    logEventStartTime(id) {
+        console.log("fancy code for id:", id);
+        //schoolA becomes school - can use for lookup in intel table
+        let siteType = id.slice(0, id.slice.length-1);
+
+        console.log("this.intel & siteType", this.intel, siteType);
+
+        this.intel[siteType]? 
+            this.intel[siteType].push(crafty.frame()):
+                this.intel[siteType] = [crafty.frame()]; 
+    }
     //move()
     //a function of Destination
     //vector movement?  [x, y, speed]
@@ -270,6 +320,7 @@ class Job extends Zone {
         this.wage = wage;
         this.staffList = {id: [staffList]};
         this.ageLimit = ageLimit;
+        
 
 
     }
@@ -282,17 +333,18 @@ class Job extends Zone {
         let job = this;
         let jobID = job.getID();
     
-        this.collisionArea = Crafty.e('2D, Canvas, Color, Collision')
-        .attr(this.area)
-        .color('#48864a')
-        .ignoreHits('Destination')
-        .onHit('Person', function(hitDatas, isFirstHit) { // on collision with bullets
+        this.collisionArea = Crafty.e('2D, Canvas, Color, Collision, Job')
+        .attr( {id: jobID, x: this.area.x, y: this.area.y, w: this.area.w, h: this.area.h} )
+        .color('#48864a');
+        //.ignoreHits('Destination')
+
+        /*.onHit('Person', function(hitDatas, isFirstHit) { // on collision with bullets
             let empID = hitDatas[0].obj.id;
  
             if (isFirstHit) {
-               // let empID = hitDatas[0].obj.id;
-                console.log("this is being sent to PunchIn() as a parameter for id ", empID);
-                job.punchIn(empID);
+                let empID = hitDatas[0].obj.id;
+                console.log("this is being sent to logEventStartTime() as a parameter for id ", empID);
+                job.logEventStartTime(empID);
                 console.log(hitDatas[0]);
  
                 console.log("JOB- %s: %s's time clock: %f", jobID, ("JOHNNY00-" + hitDatas[0].obj.id), crafty.frame() );
@@ -300,28 +352,35 @@ class Job extends Zone {
             }  else if (!hitDatas) {
                 punchOut(empID);
             }
-            /*
-            for (var i = 0, l = hitDatas.length; i < l; ++i) { // for each bullet hit
-                connole.log("Hit data: ", hitDatas[i]);
-                if (isFirstHit) {
-                //this.staffList.push()
-                }
-                this.destroy(); // player dies
-            }
-            */
-}, function leftWork() {   //Person left work, update timeclock/pay/etc
-        //old func to trac leaving work
 
-} );
+        }, function (id) {
+    
+        //log punchout
+        //console.log("punchOut() id:", jobID);
+        //let workData = this._collisionHitResults.length - 1;
+        //console.log("here is last collision data", this._collisionHitResults, workData);
+        //let empID = this._collisionHitResults[workData].id;
+        //console.log("here is ID of person leaving:", empID);
+        console.log("ID OF LAST HIT PASSED INTO CALLBACKOFF FUNC", id);
+        //console.log("Data sent to exitedColisionBox", this._collisionHitResults[]);
+        //empID = population[dater[0].obj.id];
+        console.log("%s's stafflist - person is leaving", jobID, job.staffList);
+        job.staffList[id].push(crafty.frame());
+        let shiftCount = job.staffList[id].length - 1;
+        let timeWorked = (job.staffList[id][shiftCount]) - (job.staffList[id][shiftCount] - 1);
+        console.log("Time worked:", timeWorked)
+    } 
+
+); */
     }
 
     /*
-    punchIn(..) 
+    logEventStartTime(..) 
         Triggered once a person enters the work area.
         Should record time punched in.
 
     */
-    punchIn(id) {
+    logEventStartTime(id) {
         console.log("fancy code for id:", id);
         this.staffList[id]? 
             this.staffList[id].push(crafty.frame()):
@@ -677,7 +736,8 @@ player.bind("EnterFrame", function () {
         //.attr({x: 40, y: 40, w: 5, h: 5})
         //.color('#ffcc33');
 
-    //instantiate all players
+    /*
+    //*************************instantiate all players*******************************************
     //(id, age, home, location, hungerLevel, locationHistory, inventory, intel) {
     for (let a = 0; a < START_POPA; a++) {
         let age = Math.floor(Math.random() * 20);
@@ -711,6 +771,51 @@ player.bind("EnterFrame", function () {
 
 
 }
+*/  //instantiate all players loop
+
+
+
+    //(id, age, home, location, hungerLevel, locationHistory, inventory, intel) {
+        for (let a = 0, b = 1; a < 4; a++, b += 20) {
+            let age = Math.floor(Math.random() * 20);
+    
+            //placeInHome
+            let home = [20+b, 20+b];
+            let location = home;
+            //hungerLevel [howHungry, howMuchDoYouCare range(-30 to 70)]
+            let hungerLevel = [Math.floor(Math.random() * 100), Math.floor(Math.random() * 100) - 30];
+            let locationHistory = [home];
+            let inventory = {"food": 0, "money": 0, "passport": [zoneA.id]};
+            let mvActPrefs = 
+                [ [ 
+                        ["job", 20, [134, 109]],
+                        ["school", 20, [295, 268]],
+                        ["home", 20, home],
+                        ["explore", 1, [300, 300]],
+                        ["social", 1, [400, 400]]
+                    ],
+                    [ ["social", 0], ["fight", 0], ["rest", 0] ] ];
+            
+            //  school and job intel are lists of locations
+            let intel = {
+                
+            //let mvPrefs = [ ["job", 0], ["school", 0], ["home", 0], ["explore", 0], ["social", 0] ];
+                "home": [ home.location ],
+                "school": {id: schoolA.id, timeData: []},
+                "job": {id: resA.id, timeData: []},
+                "group": ["xxxxxx"],
+                "mvPrefs": mvActPrefs[0],
+                "actPrefs": mvActPrefs[1]
+            };
+    
+        //    constructor(id, age, home, location, hungerLevel, locationHistory, inventory, intel) {
+            population.push(new Person(a, age, placeInHome(zoneA), location, hungerLevel, locationHistory, inventory, intel));
+            population[a].setSprite();
+            //console.log("PersonID: ", a," intel: \n", population[a]["intel"]);
+    
+    
+    
+    }
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));

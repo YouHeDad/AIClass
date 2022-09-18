@@ -1,6 +1,9 @@
 //var Crafty = require('/utilities/craftyjs');
 
 /*MASTER TO DO:
+    []  ******Evaluate instructions via string********
+        eval("console.log(9); console.log(10)");  prints 9 \n 10
+
     ****** BOTH PLAYERS' HIT FUNCTION RUNS AT SAME TIME?********
     setCollisionArea() {
         //Is this setting all collisions to one job zone class
@@ -41,7 +44,7 @@ crafty.bind("UpdateFrame", function () {
 })
 // Blue Prints
 // Starting population
-    const START_POPA = 15;
+    const START_POPA = 80;
     const START_POPB = 80;
     const START_POPC = 120;
     const START_POPD = 95;
@@ -64,13 +67,22 @@ class GlobalData {
 
 class Zone {
     constructor(id, x, y, w, h) {
-
         this.id = id;
         this.area = {x: x, y: y, w: w, h: h};
-
     }
 
 }
+
+class Group {
+    constructor(id, leader) {
+        this.id = id;
+        this.leader = leader;
+    }
+
+    
+
+}
+
 class Person {
     sprite;
     //directionOfTravel [x +/- &|| y+/-]
@@ -209,24 +221,28 @@ class Person {
                 if (isFirstHit) {
                     console.log("PERSON %d LOGGED INTO WORKSITE", this.id)
                     let jobID = hitDatas[0].obj.id;
-                    console.log("this is being sent to logEventStartTime() as a parameter for id ", jobID);
-                    personData.logEventStartTime(jobID);
+                    console.log("this is being sent to logEvent() as a parameter for id ", jobID);
+                    personData.logEvent(jobID, "in");
                     console.log(hitDatas[0]);
     
                     console.log("JOB- %s: %s's time clock: %f", jobID, ("JOHNNY00-" + hitDatas[0].obj.id), crafty.frame() );
                     
                 }
 
-            }, function(site) { 
+            }, function(site) { //*******PERSON EXITING JOB OR SCHOOL************/
                     let siteType = site.slice(0, site.length - 1);
                     console.log("from person: person is leaving interaction with building ", siteType);
 
-
-                    personData.intel[siteType][site].push(crafty.frame());
+                    personData.logEvent(site, "out");
+                    //personData.intel[siteType][site].push(crafty.frame());
                     console.log("JOHNNY%s's location data for %s", personData.id, siteType, personData.intel[siteType]);
 
-                    let shiftCount = personData.intel[siteType][site].length - 1;
-                    let timeWorked = (personData.intel[siteType][site][shiftCount]) - (personData.intel[siteType][site][shiftCount - 1]);
+                    let shiftCount = personData.intel[siteType][site]["out"].length - 1;
+
+
+                    //fancy map function for time worked (out, in) => (out - in) * rate
+
+                    let timeWorked = (personData.intel[siteType][site]["out"][shiftCount]) - (personData.intel[siteType][site]["in"][shiftCount]);
                     console.log("JOHNNY%s's Time worked: %s\nEarnings:  $%d", personData.id, timeWorked, (timeWorked * 18));
             })
             .onHit('Person', function(hitDatas, isFirstHit) { // on collision with bullets
@@ -235,36 +251,41 @@ class Person {
                 //--Prints for every single frame of collision.
                 //console.log("PERSON %d LOGGED INTO WORKSITE", this.id, jobID);
 
-    
+                
                 if (isFirstHit) {
                     let otherPersonID = hitDatas[0].obj.id;
-                    //generate an action, compare with other person's action via action map
-                    //generate action:
-
-                    let rc = Math.floor(Math.random() * 100) + 1;
-                    ;;;;(rc == this.actionPrefs)
 
                     console.log("JOHNNY00%d RAN INTO JOHNNY%d", this.id, otherPersonID );
-                    console.log("this is being sent to logEventStartTime() as a parameter for id ", otherPersonID);
-                    personData.logEventStartTime(otherPersonID);
+
+                    console.log("this is being sent to logEvent() as a parameter for id ", otherPersonID);
+                    personData.logEvent(otherPersonID, "in");
+                    console.log("JOHHNY00%d has elected to: ", personData.id, personData.getChoiceFromWeightedList(personData.intel["actPrefs"]));
+                    let choice = personData.getChoiceFromWeightedList(personData.intel["actPrefs"])[0];
+                    personData.performAction(choice, otherPersonID);  
+
                     console.log(hitDatas[0]);
     
                     console.log("INTERACTION- %s: %s's time clock: %f", otherPersonID , ("JOHNNY00-" + hitDatas[0].obj.id), crafty.frame() );
                     
                 }
 
-            }, function(id) { 
+            }, function(id) {  //*******EXIT INTERACTION PERSON TO PERSON*******/
 
                     console.log("ID passed to exit interaction function is: ", id);
                     console.log("and activators social intel is", personData.intel["socialHist"]);
 
-                    personData.intel["socialHist"][id].push(crafty.frame());
+                    //If we are exiting an interaction w/out prior history of the interaction
+                    //  do the following, and piece the interaction back together afterwards
+                    personData.logEvent(id, "out");
+                    //personData.intel["socialHist"][id]?
+                    //    personData.intel["socialHist"][id].push(crafty.frame()):
+                    //       personData.intel["socialHist"][id] = [].push(crafty.frame());
 
-                    let cWithPerson = personData.intel["socialHist"][id].length - 1;
+                    let nextLocation = population[this.id].nextDestination();
+                    this.asprite({x: nextLocation.x, y: nextLocation.y, reachAndWaitT: 1000 }, 6000, "smootherStep" );
+                    //let cWithPerson = personData.intel["socialHist"][id].length - 1;
                     console.log("interaction over");
-
- 
-                    
+  
                     
             })
             .bind("aspriteEnd", function(finishedasprite) {
@@ -298,7 +319,20 @@ class Person {
     //setDestination
     //afunction of make schedule that holds the logic of this.destination (where are we currently going)
     //                         gets its own function in case rerouting logic gets added later
+    getChoiceFromWeightedList(prefs) {
+        let rc = Math.floor(Math.random() * 100) + 1;
 
+        for (let a = 0, last = 0; a <= (prefs.length - 1); a++) {
+            //made it to end?  Pref is last choice
+            if (a == (prefs.length - 1) ) { return prefs[a]; }
+            
+            if (prefs[a][1] > 0) {
+                if ( (rc > last) && (rc <= (prefs[a][1] + last)) ) {return prefs[a];}
+            }
+
+            last += prefs[a][1];
+        }
+    }
     setDestination(itinerary) {
         //console.log("setDestination = ", itinerary[0]);
         this.destination = itinerary[0];  //first place in their pref/locale list
@@ -325,16 +359,18 @@ class Person {
         this.sprite.asprite(this.schedule.push(this.schedule.shift()).x, this.schedule[0].y, 6000, "smootherStep" ); 
     }
 
-    logEventStartTime(id) {
+    //
+    logEvent(id, inOrOut) {
         console.log("id of thing we ran into is:", id);
         //schoolA becomes school - can use for lookup in intel table
         let siteType = isNaN(id)? id.slice(0, id.length-1): "socialHist";
+        let outOrIn = (inOrOut == "in")? "out": "in";
 
         console.log("id.intel: ", this.id, this.intel);
         console.log("\nsite type from logEventTime() = ", siteType);
-        this.intel[siteType][id]? 
-            this.intel[siteType][id].push(crafty.frame()):
-                this.intel[siteType][id] = [crafty.frame()]; 
+        this.intel[siteType][id]?
+            this.intel[siteType][id][inOrOut].push(crafty.frame()):
+                this.intel[siteType][id] = {[inOrOut]: [crafty.frame()], [outOrIn]: []}; 
     }
     //move()
     //a function of Destination
@@ -345,8 +381,45 @@ class Person {
         this.sprite.attr( {x: this.location[0], y: this.location[1], w: 2, h: 2} );
 
     }
+    /**performAction(action, withID)
+    //action is the owner's chosen social action
+    //actionb is the encountered person's chosen social action
+    //actPrefs = [ ["fight", 0], ["join", 0], ["avoid", 0], ["share", 0] ];
+    */
+    performAction(action, withID) {
 
-    act() {
+        let b = population[withID];
+        let actionb = b.getChoiceFromWeightedList(b.intel["actPrefs"])[0];
+        let choice = ((action == actionb) || 
+                      (action == "avoid") || 
+                     ((action == "fight") && ((actionb == "share") || (actionb == "join")) ) ||
+                     ((action == "share") && (actionb = "join")) )? action : actionb;
+
+        let actionFunctions = {
+            "fight": function () {
+            let winningChances = (p) => {
+                let dist         = Math.abs(p.location[0]   -  p.home.location[0]         ) 
+                                + Math.abs(p.location[1]   -  p.home.location[1]         );
+                let probEquation = (1 - (dist / 3000))      +  (p.intel.group.length / 100)
+                                + (1 - p.actPrefs[0][1]    /                         1000);
+                return             ((dist < 20)            ?1:  probEquation          )   };
+            console.log("Our winning chances: Oppenents: ", winningChances(p), winningChances(b));
+            
+            },
+            "join": function () {
+                console.log("JOINED");
+            },            
+            "avoid": function () {
+                console.log("AVOIDED");
+            }, 
+            "share": function () {
+                console.log("SHARING INTEL");
+            }    
+        }
+        actionFunctions[choice];
+        console.log("action choice is: %s --- from (%s, %s)", choice, action, actionb);
+
+        //(action == actionb)?
 
     }
 }
@@ -383,8 +456,8 @@ class Job extends Zone {
  
             if (isFirstHit) {
                 let empID = hitDatas[0].obj.id;
-                console.log("this is being sent to logEventStartTime() as a parameter for id ", empID);
-                job.logEventStartTime(empID);
+                console.log("this is being sent to logEvent() as a parameter for id ", empID);
+                job.logEvent(empID);
                 console.log(hitDatas[0]);
  
                 console.log("JOB- %s: %s's time clock: %f", jobID, ("JOHNNY00-" + hitDatas[0].obj.id), crafty.frame() );
@@ -415,17 +488,19 @@ class Job extends Zone {
     }
 
     /*
-    logEventStartTime(..) 
+    logEvent(..) 
         Triggered once a person enters the work area.
         Should record time punched in.
 
-    */
-    logEventStartTime(id) {
+
+    logEvent(id) {
         console.log("fancy code for id:", id);
         this.staffList[id]? 
             this.staffList[id].push(crafty.frame()):
                 this.staffList[id] = [crafty.frame()]; 
     }
+    */
+
     punchOut(id) {
             //log punchout
         console.log("punchOut() id:", jobID);
@@ -616,8 +691,8 @@ function givePreferences(job, school, home) {
         return arr;
     }
 
-    mvPrefs = giveWeight(prefsChosen, howManyPrefs);
-    actionPrefs = giveWeight(actionPrefs, 4);
+    mvPrefs = giveWeight(prefsChosen, howManyPrefs).sort(function(a, b){return a[1] - b[1]});
+    actionPrefs = giveWeight(actionPrefs, 4).sort(function(a, b){return a[1] - b[1]});
 
     return [mvPrefs, actionPrefs];
     
@@ -814,12 +889,12 @@ player.bind("EnterFrame", function () {
             
         //let mvPrefs = [ ["job", 0], ["school", 0], ["home", 0], ["explore", 0], ["social", 0] ];
         "home": [ home.location ],
-        "school": {id: schoolA.id, timeData: []},
-        "job": {id: resA.id, timeData: []},
+        "school": {"schoolA": {in: [], out: []}},
+        "job": {"jobA": {in: [], out: []}},
         "group": ["xxxxxx"],
         "mvPrefs": mvActPrefs[0],
         "actPrefs": mvActPrefs[1],
-        "socialHist": {id: "MOM", timeData: []} 
+        "socialHist": {a: {in: [], out: []}} 
         };
 
     //    constructor(id, age, home, location, hungerLevel, locationHistory, inventory, intel) {
